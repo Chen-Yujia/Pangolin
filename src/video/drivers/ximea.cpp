@@ -64,14 +64,19 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
             std::string val = it->second;
             const char& back = val.back();
             if(back == 'p') {
-                stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_FRM_TRANSPORT_DATA);
                 val = val.substr(0,val.size()-1);
+                stat = xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
+                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_PACKING, 1);
+                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_FRM_TRANSPORT_DATA);
             } else if(std::stoi(val)==8) {
                 stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW8);
+                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, std::stoi(val));
+                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
             } else {
                 stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW16);
+                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, std::stoi(val));
+                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
             }
-            stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, std::stoi(val));
             if(stat!= XI_OK) {
                 pango_print_error("XimeaVideo: Unable to set pixel bit depth\n");
             }
@@ -89,7 +94,7 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
             SetParameter("height" , std::to_string(roi.h));
             SetParameter("offsetX", std::to_string(roi.x));
             SetParameter("offsetY", std::to_string(roi.y));
-        } if(it->first == "sn"){
+        } else if(it->first == "sn"){
             // do nothing since cam is open already
         } else {
             SetParameter(it->first, it->second);
@@ -103,10 +108,10 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
     if (stat != XI_OK)
         throw pangolin::VideoException("XimeaVideo: Error getting image format.");
 
-    int x_bpp;
-    stat = xiGetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, &x_bpp);
+    int o_bpp;
+    stat = xiGetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, &o_bpp);
     if (stat != XI_OK)
-        throw pangolin::VideoException("XimeaVideo: Error getting image bit depth.");
+        throw pangolin::VideoException("XimeaVideo: Error getting output bit depth.");
 
     switch(x_fmt) {
         case XI_MONO8:
@@ -124,16 +129,16 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
             pfmt = pangolin::PixelFormatFromString("RGB32");
             break;
         case XI_FRM_TRANSPORT_DATA:
-            if(x_bpp==10) {
+            if(o_bpp==10) {
                 pfmt = pangolin::PixelFormatFromString("GRAY10");
                 break;
-            } else if(x_bpp==12) {
+            } else if(o_bpp==12) {
                 pfmt = pangolin::PixelFormatFromString("GRAY12");
                 break;
             }
             [[fallthrough]];
         default:
-            throw pangolin::VideoException("XimeaVideo: Unknown pixel format: " + std::to_string(x_fmt) + " bpp:" + std::to_string(x_bpp));
+            throw pangolin::VideoException("XimeaVideo: Unknown pixel format: " + std::to_string(x_fmt) + " bpp:" + std::to_string(o_bpp));
     }
 
     int h = 0;
@@ -271,7 +276,7 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
     // getting image from camera
     XI_RETURN stat;
     if(wait) {
-       stat = xiGetImage(xiH, 5000, &x_image);
+        stat = xiGetImage(xiH, 5000, &x_image);
     } else {
         stat = xiGetImage(xiH, 0, &x_image);
     }
