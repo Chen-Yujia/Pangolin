@@ -77,18 +77,18 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
             }
         } else if(it->first == "size") {
             const ImageDim dim = p.Get<ImageDim>("size", ImageDim(0,0) );
-            SetParameter("Width"  , std::to_string(dim.x));
-            SetParameter("Height" , std::to_string(dim.y));
+            SetParameter("width"  , std::to_string(dim.x));
+            SetParameter("height" , std::to_string(dim.y));
         } else if(it->first == "pos") {
             const ImageDim pos = p.Get<ImageDim>("pos", ImageDim(0,0) );
-            SetParameter("OffsetX"  , std::to_string(pos.x));
-            SetParameter("OffsetY" , std::to_string(pos.y));
+            SetParameter("offsetX"  , std::to_string(pos.x));
+            SetParameter("offsetY" , std::to_string(pos.y));
         } else if(it->first == "roi") {
             const ImageRoi roi = p.Get<ImageRoi>("roi", ImageRoi(0,0,0,0) );
-            SetParameter("Width"  , std::to_string(roi.w));
-            SetParameter("Height" , std::to_string(roi.h));
-            SetParameter("OffsetX", std::to_string(roi.x));
-            SetParameter("OffsetY", std::to_string(roi.y));
+            SetParameter("width"  , std::to_string(roi.w));
+            SetParameter("height" , std::to_string(roi.h));
+            SetParameter("offsetX", std::to_string(roi.x));
+            SetParameter("offsetY", std::to_string(roi.y));
         } if(it->first == "sn"){
             // do nothing since cam is open already
         } else {
@@ -165,10 +165,13 @@ std::string XimeaVideo::RenameCommonParams(const std::string& name) {
     std::string xname = name;
     // overrinde a few std strings so to make driver more similar to others
     // in Pangolin
-    if (xname.compare("Gain")==0) xname = "gain";
-    if (xname.compare("ExposureTime")==0) xname = "exposure";
-    if (xname.compare("binning")==0) xname = "downsampling";
-
+    if (xname == "Gain") xname = "gain";
+    if (xname == "ExposureTime") xname = "exposure";
+    if (xname == "binning") xname = "downsampling";
+    if (xname == "OffsetX") xname = "offsetX";
+    if (xname == "OffsetY") xname = "offsetY";
+    if (xname == "Width") xname = "width";
+    if (xname == "Height") xname = "height";
     return xname;
 }
 
@@ -264,6 +267,7 @@ const std::vector<StreamInfo>& XimeaVideo::Streams() const
 
 bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
 {
+    static basetime last = pangolin::TimeNow();
     // getting image from camera
     XI_RETURN stat;
     if(wait) {
@@ -280,7 +284,8 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
         frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(ct - exposure_us);
         frame_properties[PANGO_HOST_RECEPTION_TIME_US] = picojson::value(pangolin::Time_us(now));
         frame_properties["frame_number"] = picojson::value(x_image.nframe);
-        //pango_print_info("frame: %5d : %10lu\n",x_image.nframe,uint64_t(x_image.tsUSec+x_image.tsSec*1e6));
+        pango_print_info("frame: %5d : %10lu\n",x_image.nframe,pangolin::TimeDiff_us(last,now));
+        last = now;
         if(x_image.padding_x!=0) {
             throw pangolin::VideoException("XimeaVideo: image has non zero padding, current code does not handle this!");
         }
