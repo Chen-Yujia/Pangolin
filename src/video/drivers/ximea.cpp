@@ -33,7 +33,48 @@
 namespace pangolin
 {
 
-XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
+// unpack 10p160 into 10p or 12p192 into 12p since Pangoling only understands 10p,12p
+void XimeaVideo::UnpackAndRepack(unsigned char* out, unsigned char* in, int h, int w, int bpp) {
+    const int pitch = (w*bpp)/8;
+    for(int r=0; r<h; ++r) {
+        uint8_t* pout = (uint8_t*)(out + r*pitch);
+        uint8_t* pin = in + r*pitch;
+        const uint8_t* pin_end = in + (r+1)*pitch;
+        if(bpp==12) {
+            while(pin != pin_end) {
+                uint8_t* pins = pin + 16;
+                for(int cnt = 0; cnt < 8; cnt++) {
+                    const uint8_t msbs = int8_t(*(pins+cnt));
+                    uint32_t val = (uint16_t( (uint16_t(*(pin++))<<4) | (msbs & 0x0f) )) << 12;
+                    val |= uint16_t( (uint16_t(*(pin++))<<4) | ((msbs & 0xf0)>>4) );
+                    *(pout++) = uint8_t( val & 0x0000FF);
+                    *(pout++) = uint8_t( (val & 0x00FF00) >> 8);
+                    *(pout++) = uint8_t( (val & 0xFF0000) >> 16);
+                }
+                pin += 8;
+            }
+        } else {
+            while(pin != pin_end) {
+                uint8_t* pins = pin + 16;
+                for(int cnt = 0; cnt < 4; cnt++) {
+                    const uint8_t msbs = int8_t(*(pins+cnt));
+                    uint64_t val = ( (uint64_t(*(pin++))<<2) | (msbs & 0x03) ) << 30;
+                    val |= ( (uint64_t(*(pin++))<<2) | ((msbs & 0x0C)>>2) ) << 20;
+                    val |= ( (uint64_t(*(pin++))<<2) | ((msbs & 0x30)>>4) ) << 10;
+                    val |= ( (uint64_t(*(pin++))<<2) | ((msbs & 0xC0)>>6) );
+                    *(pout++) = uint8_t( val & 0x00000000FF);
+                    *(pout++) = uint8_t( (val & 0x000000FF00) >> 8);
+                    *(pout++) = uint8_t( (val & 0x0000FF0000) >> 16);
+                    *(pout++) = uint8_t( (val & 0x00FF000000) >> 24);
+                    *(pout++) = uint8_t( (val & 0xFF00000000) >> 32);
+                }
+                pin += 4;
+            }
+        }
+    }
+}
+
+XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
 {
     XI_RETURN stat;
     memset(&x_image,0,sizeof(x_image));
@@ -62,20 +103,26 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
     for(Params::ParamMap::const_iterator it = p.params.begin(); it != p.params.end(); it++) {
         if(it->first == "bpp") {
             std::string val = it->second;
-            const char& back = val.back();
-            if(back == 'p') {
+            const bool packed = (val[val.size()-1] == 'p');
+            if(packed) {
                 val = val.substr(0,val.size()-1);
-                stat = xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
-                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_PACKING, 1);
-                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_FRM_TRANSPORT_DATA);
-            } else if(std::stoi(val)==8) {
+            }
+            const int bpp = std::stoi(val);
+            if(bpp<=8){
                 stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW8);
-                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, std::stoi(val));
-                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
+                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, bpp);
+                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, bpp);
             } else {
-                stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW16);
-                stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, std::stoi(val));
-                stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::stoi(val));
+                if(packed) {
+                    // see https://www.ximea.com/support/wiki/allprod/Transport_Data_Packing
+                    stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_FRM_TRANSPORT_DATA);
+                    stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, bpp);
+                    stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_PACKING, XI_ON);
+                } else {
+                    stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW16);
+                    stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, bpp);
+                    stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, bpp);
+                }
             }
             if(stat!= XI_OK) {
                 pango_print_error("XimeaVideo: Unable to set pixel bit depth\n");
@@ -108,10 +155,14 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
     if (stat != XI_OK)
         throw pangolin::VideoException("XimeaVideo: Error getting image format.");
 
-    int o_bpp;
-    stat = xiGetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, &o_bpp);
+    stat = xiGetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, &bpp);
     if (stat != XI_OK)
         throw pangolin::VideoException("XimeaVideo: Error getting output bit depth.");
+
+    int i_packed;
+    stat = xiGetParamInt(xiH, XI_PRM_OUTPUT_DATA_PACKING, &i_packed);
+    if (stat != XI_OK)
+        throw pangolin::VideoException("XimeaVideo: Error getting output packing.");
 
     switch(x_fmt) {
         case XI_MONO8:
@@ -129,23 +180,28 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false)
             pfmt = pangolin::PixelFormatFromString("RGB32");
             break;
         case XI_FRM_TRANSPORT_DATA:
-            if(o_bpp==10) {
-                pfmt = pangolin::PixelFormatFromString("GRAY10");
-                break;
-            } else if(o_bpp==12) {
-                pfmt = pangolin::PixelFormatFromString("GRAY12");
-                break;
+            if(bpp == 10) {
+                if(i_packed == XI_ON) {
+                    pfmt = pangolin::PixelFormatFromString("GRAY10");
+                    packed = true;
+                    break;
+                }
+            } else if(bpp == 12) {
+                if(i_packed == XI_ON) {
+                    pfmt = pangolin::PixelFormatFromString("GRAY12");
+                    packed = true;
+                    break;
+                }
             }
             [[fallthrough]];
         default:
-            throw pangolin::VideoException("XimeaVideo: Unknown pixel format: " + std::to_string(x_fmt) + " bpp:" + std::to_string(o_bpp));
+            throw pangolin::VideoException("XimeaVideo: Unknown pixel format: " + std::to_string(x_fmt) + " bpp:" + std::to_string(bpp));
     }
 
-    int h = 0;
     stat = xiGetParamInt(xiH, XI_PRM_HEIGHT, &h);
     if (stat != XI_OK)
         throw pangolin::VideoException("XimeaVideo: Error getting image height.");
-    int w = 0;
+
     stat = xiGetParamInt(xiH, XI_PRM_WIDTH, &w);
     if (stat != XI_OK)
         throw pangolin::VideoException("XimeaVideo: Error getting image width.");
@@ -282,14 +338,18 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
     }
     basetime now = pangolin::TimeNow();
     if(stat == XI_OK) {
-        memcpy(image,x_image.bp,x_image.bp_size);
+        if(packed) {
+            UnpackAndRepack(image,(unsigned char*)x_image.bp, h, w, bpp);
+        } else {
+            memcpy(image,x_image.bp,x_image.bp_size);
+        }
         frame_properties[PANGO_EXPOSURE_US] = picojson::value(exposure_us);
         uint64_t ct = uint64_t(x_image.tsUSec+x_image.tsSec*1e6);
         frame_properties[PANGO_CAPTURE_TIME_US] = picojson::value(ct);
         frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(ct - exposure_us);
         frame_properties[PANGO_HOST_RECEPTION_TIME_US] = picojson::value(pangolin::Time_us(now));
         frame_properties["frame_number"] = picojson::value(x_image.nframe);
-        pango_print_info("frame: %5d : %10lu\n",x_image.nframe,pangolin::TimeDiff_us(last,now));
+
         last = now;
         if(x_image.padding_x!=0) {
             throw pangolin::VideoException("XimeaVideo: image has non zero padding, current code does not handle this!");
