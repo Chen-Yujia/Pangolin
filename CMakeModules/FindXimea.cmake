@@ -12,7 +12,7 @@ find_path(
         "${PROGRAM_FILES}/XIMEA/package/include"
         /usr/include
         /user/include
-	    /opt/XIMEA/include
+	/opt/XIMEA/include
     PATH_SUFFIXES XIMEA
 )
 
@@ -23,15 +23,15 @@ find_library(
         "${PROGRAM_FILES}/XIMEA/package/libs"
         /usr/lib
         /user/lib
-	    /opt/XIMEA/lib
+	/opt/XIMEA/lib
     PATH_SUFFIXES ${TELI_PATH_SUFFIXES}
 )
 
 set(Ximea_INCLUDE_DIRS ${Ximea_INCLUDE_DIR})
-set(TeliCam_LIBRARIES ${Ximea_LIBRARY})
+set(Ximea_LIBRARIES ${Ximea_LIBRARY})
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args( XimeaCam
+find_package_handle_standard_args( Ximea
   FOUND_VAR Ximea_FOUND
   REQUIRED_VARS Ximea_LIBRARY Ximea_INCLUDE_DIR
 )

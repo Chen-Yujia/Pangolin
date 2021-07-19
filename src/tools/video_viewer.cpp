@@ -179,7 +179,7 @@ void VideoViewer::Run()
 
                 // Update images
                 if((frame-1) % draw_nth_frame == 0) {
-                    for(unsigned int i=0; i<images.size(); ++i) 
+                    for(unsigned int i=0; i<images.size(); ++i)
                         if(stream_views[i].IsShown()) {
                             stream_views[i].SetImage(images[i], pangolin::GlPixFormat(video.Streams()[i].PixFormat() ));
                         }
@@ -362,7 +362,7 @@ void VideoViewer::Skip(int frames)
         if (next_frame >= 0) {
             current_frame = video_playback->Seek(next_frame) -1;
             grab_until = current_frame + 1;
-        } 
+        }
     }else{
         if(frames >= 0) {
             grab_until = current_frame + frames;
@@ -379,14 +379,15 @@ bool VideoViewer::ChangeExposure(int delta_us)
 
     std::vector<pangolin::GenicamVideoInterface*> ifs = FindMatchingVideoInterfaces<pangolin::GenicamVideoInterface>(video);
     std::string exposure_time;
-    if (ifs[active_cam]->GetParameter("ExposureTime",exposure_time))
+    if (!ifs[active_cam]->GetParameter("ExposureTime",exposure_time))
     {
             return false;
     }
 
     int exp = atoi(exposure_time.c_str());
 
-    return ifs[active_cam]->SetParameter("ExposureTime", std::to_string(exp+delta_us));
+    int e = std::max(exp+delta_us,10);
+    return ifs[active_cam]->SetParameter("ExposureTime", std::to_string(e));
 }
 
 bool VideoViewer::ChangeGain(float delta)
@@ -400,9 +401,9 @@ bool VideoViewer::ChangeGain(float delta)
     {
         return false;
     }
-    double gain = atoi(gain_string.c_str());
-
-    return ifs[active_cam]->SetParameter("Gain", std::to_string(gain+delta));
+    double gain = atof(gain_string.c_str());
+    double g = std::max(gain+delta,1.0);
+    return ifs[active_cam]->SetParameter("Gain", std::to_string(g));
 }
 
 
