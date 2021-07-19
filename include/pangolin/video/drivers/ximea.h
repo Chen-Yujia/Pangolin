@@ -97,6 +97,7 @@ protected:
     int bpp;
     int w;
     int h;
+    int trigger;  // 0: free streaming; 1, rising edge; 2: falling edge; 3: software trigger; 4: high signal; 5: low signal
 
     picojson::value device_properties;
     picojson::value frame_properties;
