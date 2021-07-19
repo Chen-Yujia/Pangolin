@@ -83,6 +83,7 @@ public:
 protected:
     void InitPangoDeviceProperties();
     std::string RenameCommonParams(const std::string& name);
+    void UnpackAndRepack(unsigned char* in, unsigned char* out, int h, int pitch, int bpp);
 
     std::vector<StreamInfo> streams;
     size_t size_bytes;
@@ -92,6 +93,10 @@ protected:
     XI_IMG x_image;
     int exposure_us;
     bool streaming;
+    bool packed;
+    int bpp;
+    int w;
+    int h;
 
     picojson::value device_properties;
     picojson::value frame_properties;
