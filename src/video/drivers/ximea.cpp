@@ -145,12 +145,12 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
             // do nothing since cam is open already
         } else if(it->first == "trigger"){
             trigger = std::stoi(it->second);
-            if (trigger != 0 && trigger != 2) {
+            if (trigger < 0 || trigger > 5) {
                 pango_print_error("XImeaVideo: Unsupported trigger mode\n");
             }
 
-            if (trigger == 2) {
-                SetParameter("gpi_selector", std::to_string(5));
+            if (trigger == 1 || trigger == 2 || trigger == 4 || trigger == 5) {
+                SetParameter("gpi_selector", std::to_string(2)); // Use the red wire for triggering
                 SetParameter("gpi_mode", std::to_string(XI_GPI_TRIGGER));
             }
             SetParameter("trigger_source", std::to_string(trigger));
