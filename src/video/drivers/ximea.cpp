@@ -26,6 +26,8 @@
  */
 
 
+// ./tools/VideoViewer/VideoViewer "join:[sync_tolerance_us=100]//{ximea:[sn=UPCBS2101011,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}{ximea:[sn=UPCBS2101052,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}"
+
 #include <pangolin/factory/factory_registry.h>
 #include <pangolin/video/drivers/ximea.h>
 #include <pangolin/video/iostream_operators.h>
@@ -346,10 +348,10 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
         frame_properties[PANGO_EXPOSURE_US] = picojson::value(exposure_us);
         uint64_t ct = uint64_t(x_image.tsUSec+x_image.tsSec*1e6);
         frame_properties[PANGO_CAPTURE_TIME_US] = picojson::value(ct);
-        frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(ct - exposure_us);
+        frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(pangolin::Time_us(now) - exposure_us);
         frame_properties[PANGO_HOST_RECEPTION_TIME_US] = picojson::value(pangolin::Time_us(now));
         frame_properties["frame_number"] = picojson::value(x_image.nframe);
-
+        pango_print_info("%05d  %05lu us\n",x_image.nframe, TimeDiff_us(last,now));
         last = now;
         if(x_image.padding_x!=0) {
             throw pangolin::VideoException("XimeaVideo: image has non zero padding, current code does not handle this!");
