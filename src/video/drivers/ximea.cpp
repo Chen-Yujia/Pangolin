@@ -142,21 +142,11 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
             SetParameter("offsetX", std::to_string(roi.x));
             SetParameter("offsetY", std::to_string(roi.y));
         } else if(it->first == "sn"){
-            // do nothing since cam is open already
-        } else if(it->first == "trigger"){
-            trigger = std::stoi(it->second);
-            if (trigger < 0 || trigger > 5) {
-                pango_print_error("XImeaVideo: Unsupported trigger mode\n");
-            }
-
-            if (trigger == 1 || trigger == 2 || trigger == 4 || trigger == 5) {
-                SetParameter("gpi_selector", std::to_string(2)); // Use the red wire for triggering
-                SetParameter("gpi_mode", std::to_string(XI_GPI_TRIGGER));
-            }
-            SetParameter("trigger_source", std::to_string(trigger));
+            // do nothing since cam is open alreadyd
         } else {
             SetParameter(it->first, it->second);
         }
+        // If using the external trigger, set gpi_selector and gpi_mode(=1) before trigger_source
     }
 
     // Read pixel format
@@ -225,15 +215,27 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
     // else
     //     pango_print_info("XimeaVideo: trigger source:%d\n", info);  // 0
 
+    // stat = xiGetParamInt(xiH, XI_PRM_GPI_SELECTOR, &info);
+    // if (stat != XI_OK)
+    //     throw pangolin::VideoException("XimeaVideo: Error getting gpi selector.");
+    // else
+    //     pango_print_info("XimeaVideo: gpi_selector:%d\n", info);  // 0
+
+    // stat = xiGetParamInt(xiH, XI_PRM_GPI_MODE, &info);
+    // if (stat != XI_OK)
+    //     throw pangolin::VideoException("XimeaVideo: Error getting gpi mode.");
+    // else
+    //     pango_print_info("XimeaVideo: gpi_mode:%d\n", info);  // 0
+
     // stat = xiGetParamInt(xiH, XI_PRM_TRG_SELECTOR, &info);
     // if (stat != XI_OK)
-    //     throw pangolin::VideoException("XimeaVideo: Error getting trigger source.");
+    //     throw pangolin::VideoException("XimeaVideo: Error getting trigger selector.");
     // else
     //     pango_print_info("XimeaVideo: trigger selector:%d\n", info);  // 0
 
     // stat = xiGetParamInt(xiH, XI_PRM_COLOR_FILTER_ARRAY, &info);
     // if (stat != XI_OK)
-    //     throw pangolin::VideoException("XimeaVideo: Error getting trigger source.");
+    //     throw pangolin::VideoException("XimeaVideo: Error getting color filter array.");
     // else
     //     pango_print_info("XimeaVideo: color filter array:%d\n", info);  // 5
     // DEBUG ONLY ENDS
@@ -363,9 +365,11 @@ const std::vector<StreamInfo>& XimeaVideo::Streams() const
 
 bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
 {
-    // if (trigger == 3) {
-    //     SetParameter("trigger_software", std::to_string(1));
-    // }
+    std::string trigger;
+    GetParameter("trigger_source", trigger);
+    if (std::stoi(trigger) == 3) {
+        SetParameter("trigger_software", std::to_string(1));
+    }
     static basetime last = pangolin::TimeNow();
     // getting image from camera
     XI_RETURN stat;
