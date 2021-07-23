@@ -304,7 +304,7 @@ void XimeaVideo::InitPangoDeviceProperties()
 //! Implement VideoInput::Start()
 void XimeaVideo::Start()
 {
-    XI_RETURN stat;
+    XI_RETURN stat = XI_OK;
     if(!streaming) {
         // use the first trigger to reset internal timer
         if(ext_trig > 0){
