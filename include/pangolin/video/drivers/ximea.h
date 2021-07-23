@@ -97,6 +97,7 @@ protected:
     int bpp;
     int w;
     int h;
+    int ext_trig;
 
     picojson::value device_properties;
     picojson::value frame_properties;

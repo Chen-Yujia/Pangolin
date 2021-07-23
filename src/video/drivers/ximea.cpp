@@ -26,7 +26,7 @@
  */
 
 
-// ./tools/VideoViewer/VideoViewer "join:[sync_tolerance_us=100]//{ximea:[sn=UPCBS2101011,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}{ximea:[sn=UPCBS2101052,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}"
+// ./tools/VideoViewer/VideoViewer "join:[sync_tolerance_us=500]//{thread://ximea:[sn=UPCBS2101011,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}{thread://ximea:[sn=UPCBS2101052,exposure=20000,bpp=8,gpi_selector=2,gpi_mode=1,trigger_source=1]//}"
 
 #include <pangolin/factory/factory_registry.h>
 #include <pangolin/video/drivers/ximea.h>
@@ -76,7 +76,7 @@ void XimeaVideo::UnpackAndRepack(unsigned char* out, unsigned char* in, int h, i
     }
 }
 
-XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
+XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false), ext_trig(0)
 {
     XI_RETURN stat;
     memset(&x_image,0,sizeof(x_image));
@@ -145,7 +145,13 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
             SetParameter("offsetY", std::to_string(roi.y));
         } else if(it->first == "sn"){
             // do nothing since cam is open already
-        } else {
+        } else if(it->first == "trigger_source"){
+            const int ts = p.Get<int>("trigger_source", 0);
+            if((ts==1)||(ts==2)) {
+                ext_trig = p.Get<int>("gpi_selector", 0);
+            }
+            SetParameter(it->first, it->second);
+        }else {
             SetParameter(it->first, it->second);
         }
     }
@@ -298,11 +304,19 @@ void XimeaVideo::InitPangoDeviceProperties()
 //! Implement VideoInput::Start()
 void XimeaVideo::Start()
 {
-    XI_RETURN stat = xiStartAcquisition(xiH);
-	if (stat != XI_OK) {
-        throw pangolin::VideoException("XimeaVideo: Error starting stream.");
-    } else {
-        streaming = true;
+    XI_RETURN stat;
+    if(!streaming) {
+        // use the first trigger to reset internal timer
+        if(ext_trig > 0){
+            stat = xiSetParamInt(xiH,XI_PRM_TS_RST_MODE,XI_TS_RST_ARM_ONCE);
+            stat += xiSetParamInt(xiH,XI_PRM_TS_RST_SOURCE,ext_trig);
+        }
+        stat += xiStartAcquisition(xiH);
+	    if (stat != XI_OK) {
+            throw pangolin::VideoException("XimeaVideo: Error starting stream.");
+        } else {
+            streaming = true;
+        }
     }
 }
 
@@ -348,10 +362,10 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
         frame_properties[PANGO_EXPOSURE_US] = picojson::value(exposure_us);
         uint64_t ct = uint64_t(x_image.tsUSec+x_image.tsSec*1e6);
         frame_properties[PANGO_CAPTURE_TIME_US] = picojson::value(ct);
-        frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(pangolin::Time_us(now) - exposure_us);
+        frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(ct - exposure_us);
         frame_properties[PANGO_HOST_RECEPTION_TIME_US] = picojson::value(pangolin::Time_us(now));
         frame_properties["frame_number"] = picojson::value(x_image.nframe);
-        pango_print_info("%05d  %05lu us\n",x_image.nframe, TimeDiff_us(last,now));
+        //pango_print_info("%s %05d  %05lu us   %05lu\n",sn.c_str(),x_image.nframe, TimeDiff_us(last,now),ct);
         last = now;
         if(x_image.padding_x!=0) {
             throw pangolin::VideoException("XimeaVideo: image has non zero padding, current code does not handle this!");
