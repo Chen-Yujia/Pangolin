@@ -122,7 +122,7 @@ XimeaVideo::XimeaVideo(const Params& p): sn(""), streaming(false), packed(false)
                     stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_PACKING, XI_ON);
                 } else {
                     stat = xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_FORMAT, XI_RAW16);
-                    stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, bpp);
+                    stat += xiSetParamInt(xiH, XI_PRM_OUTPUT_DATA_BIT_DEPTH, std::min(12, bpp));
                     stat += xiSetParamInt(xiH, XI_PRM_IMAGE_DATA_BIT_DEPTH, bpp);
                 }
             }
@@ -333,6 +333,7 @@ void XimeaVideo::InitPangoDeviceProperties()
         device_properties["SensorModelID"] = std::to_string(sid);
     }
     device_properties[PANGO_HAS_TIMING_DATA] = true;
+    device_properties["PeriodUs"] = 300000;
 }
 
 //! Implement VideoInput::Start()
@@ -405,7 +406,7 @@ bool XimeaVideo::GrabNext(unsigned char* image, bool wait)
         frame_properties[PANGO_ESTIMATED_CENTER_CAPTURE_TIME_US] = picojson::value(ct - exposure_us);
         frame_properties[PANGO_HOST_RECEPTION_TIME_US] = picojson::value(pangolin::Time_us(now));
         frame_properties["frame_number"] = picojson::value(x_image.nframe);
-        //pango_print_info("%s %05d  %05lu us   %05lu\n",sn.c_str(),x_image.nframe, TimeDiff_us(last,now),ct);
+        pango_print_info("%s %05d  %05lu us   %05lu\n",sn.c_str(),x_image.nframe, TimeDiff_us(last,now),ct);
         last = now;
         if(x_image.padding_x!=0) {
             throw pangolin::VideoException("XimeaVideo: image has non zero padding, current code does not handle this!");
