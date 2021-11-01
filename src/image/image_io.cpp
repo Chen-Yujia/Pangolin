@@ -123,7 +123,7 @@ void SaveImage(const Image<unsigned char>& image, const pangolin::PixelFormat& f
     switch (file_type) {
     case ImageFileTypePng:
         // map quality [0..100] to PNG compression levels [0..9]
-        return SavePng(image, fmt, out, top_line_first, int(quality*0.09));
+        return SavePng(image, fmt, out, top_line_first, int(quality*0.03));
     case ImageFileTypeJpg:
         return SaveJpg(image, fmt, out, quality);
     case ImageFileTypePpm:
